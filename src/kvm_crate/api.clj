@@ -65,11 +65,17 @@
         ssh-public-key-path (get-in *kvm-hosts-config* [hostname :admin-user :ssh-public-key-path])
         ssh-private-key-path (get-in *kvm-hosts-config* [hostname :admin-user :ssh-private-key-path])
         passphrase (.getBytes (get-in *kvm-hosts-config* [hostname :admin-user :passphrase]))]
-    (api/make-user admin-username
-                   :public-key-path ssh-public-key-path
-                   :private-key-path ssh-private-key-path
-                   :passphrase passphrase
-                   :sudo-user sudo-user)))
+    (if (= admin-username "root")
+         (api/make-user admin-username
+                        :public-key-path ssh-public-key-path
+                        :private-key-path ssh-private-key-path
+                        :passphrase passphrase
+                        :no-sudo true)
+         (api/make-user admin-username
+                        :public-key-path ssh-public-key-path
+                        :private-key-path ssh-private-key-path
+                        :passphrase passphrase
+                        :sudo-user sudo-user))))
 
 (defn lift-one-node-and-phase
   "Lift a given host, applying only one specified phase"
