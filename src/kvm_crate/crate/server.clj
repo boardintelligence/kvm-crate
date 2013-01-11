@@ -1,4 +1,4 @@
-(ns kvm-crate.crate
+(ns kvm-crate.crate.server
   "Crate with functions for setting up and configuring KVM servers and guests"
   (:require
    [pallet.actions :as actions]
@@ -9,27 +9,26 @@
    [pallet.environment :as env])
   (:use [pallet.crate :only [def-plan-fn]]))
 
-(def-plan-fn install-deb
+(def-plan-fn install-custom-deb
   "Install a single deb by transferring local file and installing via dpkg"
   [deb-name]
   [tmp-path (m-result (str "/tmp/" deb-name))
    local-file (m-result (utils/resource-path (str "custom-debs/" deb-name)))]
   ;; transfer file and install it via dpkg
-  (actions/remote-file tmp-path :local-file local-file)
+  (actions/remote-file tmp-path :local-file local-file :literal true)
   (actions/exec-checked-script
-   "install my custom debs (these will fail, but are triggered later)"
-   (dpkg -i ~tmp-path)
-   (exit 0)))
+   "install my custom deb (will fail, but are triggered later)"
+   (dpkg -i --force-confnew ~tmp-path)))
 
-(def-plan-fn install-custom-debs
-  "Install all needed custom debs for KVM server using openvswitch"
+(def-plan-fn install-libvirt-debs
+  "Install needed libvirt debs for KVM server using openvswitch"
   []
   [custom-debs (m-result ["libvirt0_1.0.0-0ubuntu4_amd64.deb"
                           "libvirt0-dbg_1.0.0-0ubuntu4_amd64.deb"
                           "libvirt-bin_1.0.0-0ubuntu4_amd64.deb"
                           "libvirt-dev_1.0.0-0ubuntu4_amd64.deb"
                           "libvirt-doc_1.0.0-0ubuntu4_all.deb"])]
-  (m-result (map install-deb custom-debs)))
+  (map install-custom-deb custom-debs))
 
 (def-plan-fn configure-openvswitch
   "Configure openvswtich for KVM server."
@@ -39,15 +38,12 @@
 (def-plan-fn configure-server
   "Install packages for KVM server and configure networking"
   []
-  [node-hostname crate/target-name
-   host-config (env/get-environment [:host-config node-hostname])
-   admin-username (m-result (get-in host-config [:admin-user :username]))]
-
   ;; install packages
-  (install-custom-debs)
+  (actions/package-manager :update)
+  (install-libvirt-debs)
   (actions/packages :aptitude ["kvm" "ubuntu-virt-server" "python-vm-builder"
                                "openvswitch-controller" "openvswitch-brcompat"
-                               "openvswitch-switch" "openvswitch-datapath-source"])
-
+                               "openvswitch-switch" "openvswitch-datapath-source"
+                               "libnetcf1" "libxen-dev"])
   ;; setup openvswitch
   (configure-openvswitch))
