@@ -16,7 +16,7 @@
   (actions/packages :aptitude ["kvm" "ubuntu-virt-server" "python-vm-builder"
                                "openvswitch-controller" "openvswitch-brcompat"
                                "openvswitch-switch" "openvswitch-datapath-source"
-                               "libnetcf1" "libxen-dev"]))
+                               "openvswitch-ipsec" "libnetcf1" "libxen-dev"]))
 
 (def-plan-fn install-custom-deb
   "Install a single deb by transferring local file and installing via dpkg."
@@ -74,11 +74,11 @@
   []
   [node-hostname crate/target-name
    host-config (env/get-environment [:host-config node-hostname])
-   interface-config (m-result (:interface-config host-config))]
-  ;; TODO: make ovs/interfaces come from config for more flexibility!
+   interfaces-file (m-result (:interfaces-file host-config))
+   interface-config (m-result (:interface-config host-config)) ]
   (actions/remote-file "/etc/network/interfaces"
                        :literal true
-                       :template (:interfaces-file interface-config)
+                       :template interfaces-file
                        :values interface-config))
 
 (def-plan-fn install-failsafe-conf
@@ -106,10 +106,6 @@
 (def-plan-fn configure-openvswitch
   "Configure openvswtich for KVM server."
   []
-  ;; DONT THINK THIS IS NEEDED SINCE WE USE LIBVIRT WITH OVS SUPPORT!
-  ;; our own config file with BRCOMPAT=yes
-  ;;  (actions/remote-file "/etc/default/openvswitch-switch"
-  ;;                     :local-file (utils/resource-path "ovs/openvswitch-switch"))
   (install-etc-interfaces)
   (install-failsafe-conf)
   (remove-libvirt-network)
@@ -123,3 +119,17 @@
   (install-standard-packages)
   (install-custom-libvirt-packages)
   (configure-openvswitch))
+
+(def-plan-fn add-gre-port
+  "Add a GRE port for a given bridge to a given remote ip."
+  []
+  [bridge (env/get-environment [:gre-config :bridge])
+   iface (env/get-environment [:gre-config :iface])
+   remote-ip (env/get-environment [:gre-config :remote-ip])
+   psk (env/get-environment [:gre-config :psk])
+   options (m-result (format "options:remote_ip=%s options:psk=\"%s\"" remote-ip psk))]
+  (actions/exec-checked-script
+   "Add GRE port"
+   (ovs-vsctl -- --if-exists del-port ~bridge ~iface)
+   (ovs-vsctl add-port ~bridge ~iface
+              -- set interface ~iface type=ipsec_gre ~options)))

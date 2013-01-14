@@ -61,8 +61,8 @@ add additional content):
                                        :ssh-public-key-path  (utils/resource-path "ssh-keys/kvm-keys/kvm-id_rsa.pub")
                                        :ssh-private-key-path (utils/resource-path "ssh-keys/kvm-keys/kvm-id_rsa")
                                        :passphrase "foobar"}
-                          :interface-config {:interfaces-file     "ovs/interfaces"
-                                             :host0-ip4-ip        "public.iface.ip.address"
+                          :interfaces-file "ovs/interfaces"
+                          :interface-config {:host0-ip4-ip        "public.iface.ip.address"
                                              :host0-ip4-broadcast "public.iface.bcast"
                                              :host0-ip4-netmask   "public.iface.netmask"
                                              :host0-ip4-gateway   "public.iface.gw"
@@ -75,9 +75,10 @@ add additional content):
                                              :host1-ip4-netmask   "private.iface.netmask"
                                              :host1-ip4-net       "private.iface.net"}
                           :ovs-vsctl-steps "ovs-vsctl add-br ovsbr0;
+                            ovs-vsctl add-br ovsbr1
                             ovs-vsctl add-port ovsbr0 eth0;
                             ovs-vsctl add-port ovsbr0 ovshost0 -- set interface ovshost0 type=internal;
-                            ovs-vsctl add-port ovsbr0 ovshost1 -- set interface ovshost1 type=internal"}}
+                            ovs-vsctl add-port ovsbr1 ovshost1 -- set interface ovshost1 type=internal"}}
 
 (The function *utils/resource-path* is from the namespace pallet.utils and
 is handy for referring to paths on the local machine)
@@ -142,13 +143,33 @@ a config map for a host at Hetzner that is also a KVM server.
 
 NOT IMPLEMENTED YET
 
-## Connecting the openvswitches of several KVM servers
+## Connecting the OVS's of several KVM servers
 
 To create one big VLAN where KVM guests on seveal KVM servers can
 communicate with each other we use GRE+IPSec to connect the
 openvswitches of the KVM servers.
 
-NOT IMPLEMENTED YET
+The *connect-kvm-servers* function in the *api* namespace will
+connect your KVM servers as specified by the gre connections in
+the config. The host config map info related to gre connections
+take the following form:
+
+    {"host2.to.configure" {:gre-connections
+                           [{:bridge "ovsbr1"
+                             :iface "gre0"
+                             :remote-ip "1.2.3.4"
+                             :psk "my secret key"}]}
+     "host2.to.configure" {:gre-connections
+                           [{:bridge "ovsbr1"
+                             :iface "gre0"
+                             :remote-ip "4.3.2.1"
+                             :psk "my secret key"}]}}
+
+In this example we only have two hosts and there's one GRE connection
+setup between the two. If we had more we'd just specify pairs of
+matching GRE connections for the appropriate hosts (note the vector
+of hashes, just add more hashes to have more connections for a given
+host).
 
 ## License
 
