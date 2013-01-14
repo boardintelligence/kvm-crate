@@ -135,7 +135,7 @@ definining parameterized functions that produce maps of certain types
 representing certain types of hosts. This way you can also compose
 several such functions via *merge*. An example is that you could have
 one function producing the config map required by the Hetzner crate,
-and another for the kvm crate. Use both of these + marge to create
+and another for the kvm crate. Use both of these + merge to create
 a config map for a host at Hetzner that is also a KVM server.
 
 ## Creating a KVM guest VM
