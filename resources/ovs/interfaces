@@ -1,0 +1,36 @@
+### File provided by kvm-crate
+
+# Loopback device:
+auto lo
+iface lo inet loopback
+
+# device: eth0
+auto  eth0
+iface eth0 inet manual
+  up ifconfig $IFACE 0.0.0.0 up
+  down ifconfig $IFACE down
+
+# device: ovshost0
+auto  ovshost0
+iface ovshost0 inet static
+  address   ~{host0-ip4-ip}
+  broadcast ~{host0-ip4-broadcast}
+  netmask   ~{host0-ip4-netmask}
+  gateway   ~{host0-ip4-gateway}
+  # default route to access subnet
+  up route add -net ~{host0-ip4-net} netmask ~{host0-ip4-netmask} gw ~{host0-ip4-gateway} ovshost0
+
+iface ovshost0 inet6 static
+  address ~{host0-ip6-ip}
+  netmask ~{host0-ip6-netmask}
+  gateway ~{host0-ip6-gateway}
+
+# device: ovshost1
+auto  ovshost1
+iface ovshost1 inet static
+  address   ~{host1-ip4-ip}
+  broadcast ~{host1-ip4-broadcast}
+  netmask   ~{host1-ip4-netmask}
+  # gateway   ~{host1-ip4-gateway}
+  # default route to access subnet
+  # up route add -net ~{host1-ip4-net} netmask ~{host1-ip4-netmask} gw ~{host1-ip4-gateway} ovshost1

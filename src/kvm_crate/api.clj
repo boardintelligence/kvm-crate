@@ -15,10 +15,10 @@
 (defn configure-kvm-server
   "Set up a machine to act as a KVM server"
   [hostname]
-  (println (format "Configuring KVM server for %s.." hostname))
   (helpers/ensure-nodelist-bindings)
   (when-not (host-is-kvm-server? hostname)
     (throw (IllegalArgumentException. (format "%s is not a kvm-server!" hostname))))
-  (when (fsmop/failed?
-         (helpers/lift-one-node-and-phase hostname :configure-kvm-server))
-    (throw (IllegalStateException. "Failed to configure KVM server!"))))
+  (let [result (helpers/lift-one-node-and-phase hostname :configure-kvm-server)]
+    (when (fsmop/failed? result)
+      (throw (IllegalStateException. "Failed to configure KVM server!")))
+    result))
