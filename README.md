@@ -31,6 +31,7 @@ packages that are used instead (prepared from the Ubuntu raring sources).
 ## Configuring a KVM server
 
 First all make sure the following things hold true:
+
 1. Your intended KVM server host exists and runs Ubuntu 12.04 LTS
 2. The host is included in your hosts config map
 3. You have downloaded the custom libvirt deps to "custom-debs/" somewhere on the classpath
