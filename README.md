@@ -57,12 +57,14 @@ add additional content):
 
     {"host.to.configure" {:host-type :kvm-server
                           :group-spec kvm-create.specs/kvm-server-g
-                          :ip "1.2.3.4"
+                          :ip "probably same as host0-ip4-ip below"
+                          :private-ip "probably same as host1-ip4-ip below" ;; ip on the private network
+                          :private-hostname "host-int.to.configure"         ;; hostname on the private network
                           :admin-user {:username "root"
                                        :ssh-public-key-path  (utils/resource-path "ssh-keys/kvm-keys/kvm-id_rsa.pub")
                                        :ssh-private-key-path (utils/resource-path "ssh-keys/kvm-keys/kvm-id_rsa")
                                        :passphrase "foobar"}
-                          :interfaces-file "ovs/interfaces"
+                          :interfaces-file "ovs/interfaces" ;; template for /etc/network/interfaces
                           :interface-config {:host0-ip4-ip        "public.iface.ip.address"
                                              :host0-ip4-broadcast "public.iface.bcast"
                                              :host0-ip4-netmask   "public.iface.netmask"
@@ -177,6 +179,35 @@ host).
 The function takes no arugments and can be called like this:
 
     (kvm-crate.api/connect-kvm-servers)
+
+### Using one KVM server on the private network as DHCP server for guest VMs
+
+In order to be able to assign guest VMs IPs via DHCP we need to assign one
+server to act as DHCP server for the private network. We use *dnsmasq* for
+this purpose, as well as acting as a forwarding DNS server for the guest VMs.
+
+The easiest way to accomplish this that I've found is the following:
+
+* Use an upstart job to start dnsmasq when our internal interface is up. If
+  the server had :dhcp-server true set when it was configured the upstart job
+  has already been transfered. If not you can install it via
+  *kvm-crate.api/install-dnsmasq-upstart-job*.
+* Use a static dnsmasq opts file (an example can be found in *resources/ovs/ovs-net-dnsmasq.opts-sample*).
+* Use *(kvm-crate.api/update-dhcp-hosts-file dhcp-server-hostname)* to dynamically
+  generate the dnsmasq hosts file (and reread config via kill -HUP) including all
+  guest VMs. Again this would have been done on configure if host was already
+  marked as the dhcp server.
+
+The host config map needed to support this is:
+
+    {"dhcp.server.to.configure" {:dhcp-server true
+                                 :dhcp-interface "ovshost1"}}
+
+
+### Ensuring all hosts, servers and guest, have proper /etc/hosts files
+
+You can use *kvm-crate.api/update-hosts-files* to update the /etc/hosts files
+of all hosts with the non-DHCP assigned IPs on the private network.
 
 ## License
 

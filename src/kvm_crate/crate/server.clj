@@ -6,6 +6,7 @@
    [pallet.utils :as utils]
    [pallet.crate.sudoers :as sudoers]
    [pallet.crate.ssh-key :as ssh-key]
+   [pallet.crate.etc-hosts :as etc-hosts]
    [pallet.environment :as env])
   (:use [pallet.crate :only [def-plan-fn]]))
 
@@ -75,7 +76,7 @@
   [node-hostname crate/target-name
    host-config (env/get-environment [:host-config node-hostname])
    interfaces-file (m-result (:interfaces-file host-config))
-   interface-config (m-result (:interface-config host-config)) ]
+   interface-config (m-result (:interface-config host-config))]
   (actions/remote-file "/etc/network/interfaces"
                        :literal true
                        :template interfaces-file
@@ -133,3 +134,59 @@
    (ovs-vsctl -- --if-exists del-port ~bridge ~iface)
    (ovs-vsctl add-port ~bridge ~iface
               -- set interface ~iface type=ipsec_gre ~options)))
+
+(def-plan-fn add-host-to-hosts
+  "Add a single host."
+  [[hostname config]]
+  (etc-hosts/host (:private-ip config) (:private-hostname config)))
+
+(defn is-static-ip?
+  "Does host have a statically assigned IP"
+  [config]
+  (and (not (nil? (:ip config)))
+       (nil? (:mac config))))
+
+(def-plan-fn update-hosts-file
+  "Update the hosts file to include all non-DHCP IPs"
+  []
+  [node-hostname crate/target-name
+   config (env/get-environment [:host-config node-hostname])
+   ip (m-result (:ip config))
+   static-ips (env/get-environment [:static-ips])]
+
+  ;; add entry for the host itself
+  (etc-hosts/host ip node-hostname)
+  ;; then the statis IPs
+  (map add-host-to-hosts static-ips)
+  etc-hosts/hosts)
+
+(defn is-dhcp-ip?
+  "Is IP to be assinged by DHCP?"
+  [config]
+  (and (not (nil? (:ip config)))
+       (not (nil? (:mac config)))))
+
+(def-plan-fn update-dhcp-hosts-file
+  []
+  [node-hostname crate/target-name
+   dhcp-hosts-content (env/get-environment [:dhcp-hosts-content])
+   opts-file (env/get-environment [:host-config node-hostname :dnsmasq-optsfile])]
+
+  (actions/remote-file "/etc/ovs-net-dnsmasq.opts"
+                       :local-file opts-file)
+  (actions/remote-file "/etc/ovs-net-dnsmasq.hosts"
+                       :content dhcp-hosts-content
+                       :mode "0644"
+                       :literal true)
+  (actions/exec-checked-script
+   "kill -HUP dnsmasq"
+   ("if [ -f /var/run/ovs-net-dnsmasq.pid ];then kill -HUP `cat /var/run/ovs-net-dnsmasq.pid`;fi")))
+
+(def-plan-fn install-dnsmasq-upstart-job
+  []
+  [node-hostname crate/target-name
+   interface (env/get-environment [:host-config node-hostname :dhcp-interface])]
+  (actions/remote-file "/etc/init/ovs-net-dnsmasq.conf"
+                       :literal true
+                       :template "ovs/ovs-net-dnsmasq.conf"
+                       :values {:interface interface}))
