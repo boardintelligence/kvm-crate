@@ -52,7 +52,7 @@ The second argument to *with-nodelist-config* is a map that will be passed as th
 argument to any subsequent lift operation that takes place under the covers (and is
 hence available to any of your own pallet plan functions).
 
-The format of the hosts-config argument that kvm-crate looks for is this (it's ok to
+The format of the hosts-config argument that *configure-kvm-server* looks for is this (it's ok to
 add additional content):
 
     {"host.to.configure" {:host-type :kvm-server
@@ -82,19 +82,19 @@ add additional content):
                             ovs-vsctl add-port ovsbr1 ovshost1 -- set interface ovshost1 type=internal"}}
 
 (The function *utils/resource-path* is from the namespace pallet.utils and
-is handy for referring to paths on the local machine)
+is handy for referring to paths somewhere onthe local machine classpath)
 
 I've left the configuration of the OpenVSwitch network pretty free form. Hence
 the parts in *:interface-config* and *:ovs-vsctl-steps* are freeform and needs
-to be compatible with the content of the file given in the files references
+to be compatible with the content of the file given in the files referenced
 by *:interfaces-file*. You can find an example in the
-*kvm-crate/resources/ovs/interfaces* file that is compatible with the config
+*kvm-crate/resources/ovs/interfaces*. It is compatible with the config
 example above. The example assumes one public interface on eth0 that is added to
 the OVS, we create 2 internal interfaces ovshost0 and ovshost1. The ovshost0
 inteface gets the same config as eth0 would have had before we made it part of
 the OVS setup, and ovshost1 is an interace we put on the private network we'll
-set up for the KVM guest VMs of the host. We will use this interface to
-do things like serve DHCP and DNS on the private network.
+set up for the KVM guest VMs. We can use this interface to do things like serve
+DHCP and DNS on the private network.
 
 The *ovs-vsctl-steps* is a freeform set of instructions that are supposed
 to properly configure OVS taking into account how your /etc/network/interfaces
@@ -102,19 +102,19 @@ and later private network for the KVM guest VMs are setup. The example
 above is compatible with the setup descrived in the previous paragraph.
 
 The *configure-kvm-server* function in the *api* namespace can be used
-as a convenience method to perform the KVM server setup. Note it will
-make the network changes made on the KVM server come into effect 1 minute
-after it has run (via the at command). This is because the network changes
-will cause our connection to drop and signal an error. To avoid this we delay
-execution until after we have disconnected from the host. **NOTE: if you
-mess up the ovs-vsctl steps it's quite possible to lock yourself out of
-the remote machine so please take extra special care making sure it
-will run cleanly since you may not get a 2nd shot!**.
+as a convenience method to perform the KVM server setup (as apart to
+manually using lift). Note it will make the network changes made on the
+KVM server come into effect 1 minute after it has run (via the at command).
+This is because the network changes will cause our connection to drop and
+signal an error. To avoid this we delay execution until after we have
+disconnected from the host. **NOTE: if you mess up the ovs-vsctl steps it's
+quite possible to lock yourself out of the remote machine so please take
+extra special care making sure it will run cleanly since you may not get
+a 2nd shot if you don't have console access to the host!**.
 
 You can use the *configure-kvm-server* function in your own functions to
 create more complete functions that do more than just the KVM server
-configuration. as its last step since
-as part of For example this is how we setup newly ordered Hetzner
+configuration. For example this is how we setup newly ordered Hetzner
 servers as KVM servers:
 
     (defn configure-hetzner-kvm-server
@@ -152,8 +152,10 @@ openvswitches of the KVM servers.
 
 The *connect-kvm-servers* function in the *api* namespace will
 connect your KVM servers as specified by the gre connections in
-the config. The host config map info related to gre connections
-take the following form:
+the config. This is again done in a pretty free form way to
+give maximum flexibility, at the cost of making it possible for
+you to shoot yourself in the foot. The host config map info related
+to gre connections take the following form:
 
     {"host2.to.configure" {:gre-connections
                            [{:bridge "ovsbr1"
@@ -171,6 +173,10 @@ setup between the two. If we had more we'd just specify pairs of
 matching GRE connections for the appropriate hosts (note the vector
 of hashes, just add more hashes to have more connections for a given
 host).
+
+The function takes no arugments and can be called like this:
+
+    (kvm-crate.api/connect-kvm-servers)
 
 ## License
 
