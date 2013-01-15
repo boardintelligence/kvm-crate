@@ -162,7 +162,7 @@ to gre connections take the following form:
                              :iface "gre0"
                              :remote-ip "1.2.3.4"
                              :psk "my secret key"}]}
-     "host2.to.configure" {:gre-connections
+     "host1.to.configure" {:gre-connections
                            [{:bridge "ovsbr1"
                              :iface "gre0"
                              :remote-ip "4.3.2.1"
