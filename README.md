@@ -45,10 +45,10 @@ of how and where to place the files can be found in the provided
 Step 2 will be described in more detail shortly, let's first see how
 the call looks (assuming you are use'ing the kvm-create.api namespace):
 
-    (with-config [hosts-config {}]
+    (with-nodelist-config [hosts-config {}]
       (configure-kvm-server "host.to.configure")
 
-The second argument to *with-config* is a map that will be passed as the :environment
+The second argument to *with-nodelist-config* is a map that will be passed as the :environment
 argument to any subsequent lift operation that takes place under the covers (and is
 hence available to any of your own pallet plan functions).
 
