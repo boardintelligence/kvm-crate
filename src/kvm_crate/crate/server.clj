@@ -160,22 +160,35 @@
   (map add-host-to-hosts static-ips)
   etc-hosts/hosts)
 
-(defn is-dhcp-ip?
+(defn- is-dhcp-ip?
   "Is IP to be assinged by DHCP?"
   [config]
   (and (not (nil? (:ip config)))
        (not (nil? (:mac config)))))
 
-(def-plan-fn update-dhcp-hosts-file
+(defn- dhcp-hosts-content
+  [hosts-config]
+  (let [dhcp-ips (filter (fn [[host config]]
+                           (is-dhcp-ip? config))
+                         hosts-config)]
+    (reduce str "" (map (fn [[host config]]
+                          (format "%s,%s,%s,infinite\n"
+                                  (:mac config)
+                                  (:ip config)
+                                  host))
+                        dhcp-ips))))
+
+(def-plan-fn update-dhcp-config
   []
   [node-hostname crate/target-name
-   dhcp-hosts-content (env/get-environment [:dhcp-hosts-content])
+   hosts-config (env/get-environment [:host-config])
+   hosts-file-content (m-result (dhcp-hosts-content hosts-config))
    opts-file (env/get-environment [:host-config node-hostname :dnsmasq-optsfile])]
 
   (actions/remote-file "/etc/ovs-net-dnsmasq.opts"
                        :local-file opts-file)
   (actions/remote-file "/etc/ovs-net-dnsmasq.hosts"
-                       :content dhcp-hosts-content
+                       :content hosts-file-content
                        :mode "0644"
                        :literal true)
   (actions/exec-checked-script
@@ -189,4 +202,19 @@
   (actions/remote-file "/etc/init/ovs-net-dnsmasq.conf"
                        :literal true
                        :template "ovs/ovs-net-dnsmasq.conf"
-                       :values {:interface interface}))
+                       :values {:interface interface})
+  (actions/exec-checked-script
+   "Start dnsmasq for priate network"
+   (start ovs-net-dnsmasq)))
+
+(def-plan-fn configure-dhcp-server
+  "Perform configuration needed to have a working DHCP server."
+  []
+  (update-dhcp-config)
+  (install-dnsmasq-upstart-job))
+
+(def-plan-fn configure-image-server
+  "Perform configuration needed to have a working KVM image server."
+  []
+  ;; TODO: outstanding
+  )

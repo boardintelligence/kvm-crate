@@ -5,25 +5,34 @@
    [kvm-crate.crate.server :as kvm-s]))
 
 (def
-  ^{:doc "Server spec for a KVM server (host)"}
+  ^{:doc "Server spec for a KVM server (host)."}
   kvm-server
   (api/server-spec
    :phases
-   {:configure-kvm-server (api/plan-fn (kvm-s/configure-server))
-    ;;:create-guest-vm-user (api/plan-fn (kvm/create-guest-vm-user))
-    ;;:create-guest-vm (api/plan-fn (kvm/create-guest-vm))
+   {:configure (api/plan-fn (kvm-s/configure-server))
+    :;;create-guest-vm-user (api/plan-fn (kvm/create-guest-vm-user))
+    :create-guest-vm (api/plan-fn (kvm/create-guest-vm))
     ;;:create-guest-vm-upstart (api/plan-fn (kvm/create-guest-vm-upstart))
     }))
 
 (def
-  ^{:doc "Group spec for a KVM server (host)"}
-  kvm-server-g
-  (api/group-spec
-   "kvm-server-g"
-   :extends [kvm-server]))
+  ^{:doc "Spec for a server acting as DHCP for private network."}
+  kvm-dhcp-server
+  (api/server-spec
+   :phases
+   {:configure (api/plan-fn (kvm-s/configure-dhcp-server))
+    :update-dhcp-config (api/plan-fn (kvm-s/update-dhcp-config))}))
 
 (def
-  ^{:doc "Spec for a KVM guest server"}
+  ^{:doc "Spec for a server acting as KVM image server."}
+  kvm-image-server
+  (api/server-spec
+   :phases
+   {:configure (api/plan-fn (kvm-s/congigure-image-server))
+    :create-image (api/plan-fn (kvm-s/create-image))}))
+
+(def
+  ^{:doc "Spec for a KVM guest VM."}
   kvm-guest-vm
   (api/server-spec
    :phases

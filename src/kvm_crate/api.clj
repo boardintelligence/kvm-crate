@@ -13,35 +13,10 @@
   [hostname]
   (helpers/host-has-phase? hostname :configure-kvm-server))
 
-(defn update-dhcp-hosts-file
-  "Update the dhcp hosts file on DHCP server for private LAN."
-  [dhcp-server]
-  (helpers/ensure-nodelist-bindings)
-  (let [dhcp-ips (doall (filter (fn [[host config]]
-                                  (server-crate/is-dhcp-ip? config))
-                                helpers/*nodelist-hosts-config*))
-        dhcp-hosts-content (reduce str ""
-                                   (map (fn [[host config]]
-                                          (format "%s,%s,%s,infinite\n"
-                                                  (:mac config)
-                                                  (:ip config)
-                                                  host))
-                                        dhcp-ips))
-        result (helpers/run-one-plan-fn dhcp-server
-                                        server-crate/update-dhcp-hosts-file
-                                        {:dhcp-hosts-content dhcp-hosts-content})]
-    (when (fsmop/failed? result)
-      (throw (IllegalStateException. (format "Failed to update dhcp hots file for %s!" dhcp-server))))
-    result))
-
-(defn install-dnsmasq-upstart-job
-  "Install the dnsmasq upstart job on DHCP server"
+(defn host-is-dhcp-server?
+  "Check if a host is a DHCP server (as understood by the kvm-create)"
   [hostname]
-  (helpers/ensure-nodelist-bindings)
-  (let [result (helpers/run-one-plan-fn hostname server-crate/install-dnsmasq-upstart-job)]
-    (when (fsmop/failed? result)
-      (throw (IllegalStateException. "Failed to install dnsmasq upstart job!")))
-    result))
+  (helpers/host-has-phase? hostname :update-dhcp-config))
 
 (defn configure-kvm-server
   "Set up a machine to act as a KVM server"
@@ -49,10 +24,7 @@
   (helpers/ensure-nodelist-bindings)
   (when-not (host-is-kvm-server? hostname)
     (throw (IllegalArgumentException. (format "%s is not a kvm-server!" hostname))))
-  (when (get-in helpers/*nodelist-hosts-config* [hostname :dhcp-server])
-    (install-dnsmasq-upstart-job hostname)
-    (update-dhcp-hosts-file hostname))
-  (let [result (helpers/lift-one-node-and-phase hostname :configure-kvm-server)]
+  (let [result (helpers/lift-one-node-and-phase hostname :configure)]
     (when (fsmop/failed? result)
       (throw (IllegalStateException. "Failed to configure KVM server!")))
     result))
@@ -89,7 +61,7 @@
       (throw (IllegalStateException. (format "Failed to update /etc/hosts for %s!" hostname))))
     result))
 
-(defn update-hosts-with-static-ips
+(defn update-etc-hosts-files
   "Update /etc/hosts to include all non-DHCP IPs (on all hosts)"
   []
   (helpers/ensure-nodelist-bindings)
@@ -97,3 +69,14 @@
                              (server-crate/is-static-ip? config))
                            helpers/*nodelist-hosts-config*)]
     (doall (map (partial update-hosts-file static-ips) helpers/*nodelist-hosts-config*))))
+
+(defn update-dhcp-config
+  "Update the dhcp hosts file on DHCP server for private LAN."
+  [dhcp-server]
+  (helpers/ensure-nodelist-bindings)
+  (when-not (host-is-dhcp-server? dhcp-server)
+    (throw (IllegalArgumentException. (format "%s is not a dhcp server!" hostname))))
+  (let [result (helpers/lift-one-node-and-phase hostname :update-dhcp-config)]
+    (when (fsmop/failed? result)
+      (throw (IllegalStateException. "Failed to update dhcp config!")))
+    result))

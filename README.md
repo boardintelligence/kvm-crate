@@ -186,27 +186,30 @@ In order to be able to assign guest VMs IPs via DHCP we need to assign one
 server to act as DHCP server for the private network. We use *dnsmasq* for
 this purpose, as well as acting as a forwarding DNS server for the guest VMs.
 
-The easiest way to accomplish this that I've found is the following:
+To do this I've provided the server spec *kvm-crate.specs/kvm-dhcp-server*
+that your group spec for the actual KVM server should inherit from.
 
-* Use an upstart job to start dnsmasq when our internal interface is up. If
-  the server had :dhcp-server true set when it was configured the upstart job
-  has already been transfered. If not you can install it via
-  *kvm-crate.api/install-dnsmasq-upstart-job*.
-* Use a static dnsmasq opts file (an example can be found in *resources/ovs/ovs-net-dnsmasq.opts-sample*).
-* Use *(kvm-crate.api/update-dhcp-hosts-file dhcp-server-hostname)* to dynamically
-  generate the dnsmasq hosts file (and reread config via kill -HUP) including all
-  guest VMs. Again this would have been done on configure if host was already
-  marked as the dhcp server.
+This spec has a *:configure* phase that does the following:
 
-The host config map needed to support this is:
+* Use an upstart job to start dnsmasq when our internal interface is up.
+* Update the dnsmasq dhcp config (hosts and options file).
 
-    {"dhcp.server.to.configure" {:dhcp-server true
-                                 :dhcp-interface "ovshost1"}}
+Notes:
 
+* An example dnsmasq options files can be found in
+  *resources/ovs/ovs-net-dnsmasq.opts-sample*.
+* You can use *(kvm-crate.api/update-dhcp-config dhcp-server-hostname)* to
+  dynamically generate the dnsmasq hosts file (and reread the config via
+  kill -HUP) including all guest VMs.
+
+The host config map needed to support the spec and the update function is:
+
+    {"dhcp.server.to.configure" {:dhcp-interface "ovshost1"
+                                 :dnsmasq-optsfile (utils/resource-path "ovs/ovs-net-dnsmasq.opts"}}
 
 ### Ensuring all hosts, servers and guest, have proper /etc/hosts files
 
-You can use *kvm-crate.api/update-hosts-files* to update the /etc/hosts files
+You can use *kvm-crate.api/update-etc-hosts-files* to update the /etc/hosts files
 of all hosts with the non-DHCP assigned IPs on the private network.
 
 ## License
