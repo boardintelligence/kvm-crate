@@ -10,7 +10,7 @@
   (api/server-spec
    :phases
    {:configure (api/plan-fn (kvm-s/configure-server))
-    :;;create-guest-vm-user (api/plan-fn (kvm/create-guest-vm-user))
+    ;;create-guest-vm-user (api/plan-fn (kvm/create-guest-vm-user))
     :create-guest-vm (api/plan-fn (kvm/create-guest-vm))
     ;;:create-guest-vm-upstart (api/plan-fn (kvm/create-guest-vm-upstart))
     }))
