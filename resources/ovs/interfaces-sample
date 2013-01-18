@@ -10,27 +10,19 @@ iface eth0 inet manual
   up ifconfig $IFACE 0.0.0.0 up
   down ifconfig $IFACE down
 
-# device: ovshost0
-auto  ovshost0
-iface ovshost0 inet static
+# device: pub0
+auto  pub0
+iface pub0 inet static
   address   ~{host0-ip4-ip}
   broadcast ~{host0-ip4-broadcast}
   netmask   ~{host0-ip4-netmask}
   gateway   ~{host0-ip4-gateway}
   # default route to access subnet
-  up route add -net ~{host0-ip4-net} netmask ~{host0-ip4-netmask} gw ~{host0-ip4-gateway} ovshost0
+  up route add -net ~{host0-ip4-net} netmask ~{host0-ip4-netmask} gw ~{host0-ip4-gateway} pub0
 
-iface ovshost0 inet6 static
-  address ~{host0-ip6-ip}
-  netmask ~{host0-ip6-netmask}
-  gateway ~{host0-ip6-gateway}
-
-# device: ovshost1
-auto  ovshost1
-iface ovshost1 inet static
+# device: priv0
+auto  priv0
+iface priv0 inet static
   address   ~{host1-ip4-ip}
   broadcast ~{host1-ip4-broadcast}
   netmask   ~{host1-ip4-netmask}
-  # gateway   ~{host1-ip4-gateway}
-  # default route to access subnet
-  # up route add -net ~{host1-ip4-net} netmask ~{host1-ip4-netmask} gw ~{host1-ip4-gateway} ovshost1
