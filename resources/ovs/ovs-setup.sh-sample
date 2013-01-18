@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# make sure we have a logfile
+touch /var/log/ovs-setup.log
+echo "Start of OVS setup run on $(date)" >> /var/log/ovs-setup.log
+
+# pick up changes to eth0 etc from /etc/network/interfaces
+service networking restart >> /var/log/ovs-setup.log 2>&1
+
+# first tear down the OVS setup
+ovs-vsctl -- --if-exists del-port public-br pub0 >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl -- --if-exists del-port public-br eth0 >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl -- --if-exists del-br public-br >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl -- --if-exists del-port private-br priv0 >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl -- --if-exists del-br private-br >> /var/log/ovs-setup.log 2>&1
+
+# then recreate the OVS setup
+ovs-vsctl add-br public-br >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl add-port public-br eth0 >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl add-port public-br pub0 -- set interface pub0 type=internal >> /var/log/ovs-setup.log 2>&1
+
+ovs-vsctl add-br private-br >> /var/log/ovs-setup.log 2>&1
+ovs-vsctl add-port private-br priv0 -- set interface priv0 type=internal >> /var/log/ovs-setup.log 2>&1
+# show the results
+ovs-vsctl show >> /var/log/ovs-setup.log 2>&1
+
+echo "Done with OVS setup run on $(date)" >> /var/log/ovs-setup.log

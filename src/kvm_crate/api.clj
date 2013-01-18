@@ -11,12 +11,17 @@
 (defn host-is-kvm-server?
   "Check if a host is a KVM server (as understood by the kvm-create)"
   [hostname]
-  (helpers/host-has-phase? hostname :configure-kvm-server))
+  (helpers/host-has-phase? hostname :crate-guest-vm))
 
 (defn host-is-dhcp-server?
   "Check if a host is a DHCP server (as understood by the kvm-create)"
   [hostname]
   (helpers/host-has-phase? hostname :update-dhcp-config))
+
+(defn host-is-image-server?
+  "Check if a host is an image server (as understood by the kvm-create)"
+  [hostname]
+  (helpers/host-has-phase? hostname :create-image))
 
 (defn configure-kvm-server
   "Set up a machine to act as a KVM server"
@@ -75,8 +80,19 @@
   [dhcp-server]
   (helpers/ensure-nodelist-bindings)
   (when-not (host-is-dhcp-server? dhcp-server)
-    (throw (IllegalArgumentException. (format "%s is not a dhcp server!" hostname))))
-  (let [result (helpers/lift-one-node-and-phase hostname :update-dhcp-config)]
+    (throw (IllegalArgumentException. (format "%s is not a dhcp server!" dhcp-server))))
+  (let [result (helpers/lift-one-node-and-phase dhcp-server :update-dhcp-config)]
     (when (fsmop/failed? result)
       (throw (IllegalStateException. "Failed to update dhcp config!")))
+    result))
+
+(defn create-kvm-image
+  "Create a kvm image on a given image server."
+  [image-server image-spec]
+  (helpers/ensure-nodelist-bindings)
+  (when-not (host-is-image-server? image-server)
+    (throw (IllegalArgumentException. (format "%s is not an image server!" image-server))))
+  (let [result (helpers/lift-one-node-and-phase image-server :create-image {:image-spec image-spec})]
+    (when (fsmop/failed? result)
+      (throw (IllegalStateException. "Failed to create image!")))
     result))

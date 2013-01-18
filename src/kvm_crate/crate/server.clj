@@ -15,9 +15,11 @@
   []
   (actions/package-manager :update)
   (actions/packages :aptitude ["kvm" "ubuntu-virt-server" "python-vm-builder"
-                               "openvswitch-controller" "openvswitch-brcompat"
-                               "openvswitch-switch" "openvswitch-datapath-source"
-                               "openvswitch-ipsec" "libnetcf1" "libxen-dev"]))
+                               "openvswitch-brcompat" "openvswitch-common"
+                               "openvswitch-controller" "openvswitch-datapath-dkms"
+                               "openvswitch-ipsec" "openvswitch-pki"
+                               "openvswitch-switch" "openvswitch-test"
+                               "libnetcf1" "libxen-dev"]))
 
 (def-plan-fn install-custom-deb
   "Install a single deb by transferring local file and installing via dpkg."
@@ -31,16 +33,6 @@
    "install my custom deb (will fail, but are triggered later)"
    (dpkg -i --force-confnew ~tmp-path)))
 
-(def-plan-fn install-custom-libvirt-packages
-  "Install needed libvirt debs for KVM server using openvswitch."
-  []
-  [custom-debs (m-result ["libvirt0_1.0.0-0ubuntu4_amd64.deb"
-                          "libvirt0-dbg_1.0.0-0ubuntu4_amd64.deb"
-                          "libvirt-bin_1.0.0-0ubuntu4_amd64.deb"
-                          "libvirt-dev_1.0.0-0ubuntu4_amd64.deb"
-                          "libvirt-doc_1.0.0-0ubuntu4_all.deb"])]
-  (map install-custom-deb custom-debs))
-
 (def-plan-fn remove-libvirt-network
   "Remove the default network installed by libvirt."
   []
@@ -52,7 +44,7 @@
           1)
      (do
        (virsh net-destroy default)
-       (virsh net-autostart --disable default)))
+       (virsh net-undefine default)))
    (service libvirt-bin stop)
    (service qemu-kvm stop)))
 
@@ -62,13 +54,6 @@
   (actions/exec-checked-script
    "Remove ebtables package, not needed"
    (aptitude --assume-yes purge ebtables)))
-
-(def-plan-fn auto-install-ovs-modules
-  "Run module-assistant to make sure the ovs modules are properly installed."
-  []
-  (actions/exec-checked-script
-   "Use module-assistant to install ovs modules"
-   (module-assistant --text-mode --non-inter auto-install openvswitch-datapath)))
 
 (def-plan-fn install-etc-interfaces
   "Install our custom /etc/network/interfaces."
@@ -90,19 +75,24 @@
                        :local-file (utils/resource-path "ovs/failsafe.conf")
                        :literal true))
 
-(def-plan-fn perform-ovs-vsctl-steps
-  "Perform ovs-vsctl steps to setup OVS bridge and internal intefaces."
+(def-plan-fn perform-ovs-setup
+  "Perform ovs-vsctl steps to setup OVS bridge and ports."
   []
   [node-hostname crate/target-name
-   host-config (env/get-environment [:host-config node-hostname])
-   ovs-vsctl-steps (m-result (:ovs-vsctl-steps host-config))]
+   ovs-setup (env/get-environment [:host-config node-hostname :ovs-setup])]
+
+  (actions/remote-file "/tmp/ovs-setup.sh"
+                       :local-file ovs-setup
+                       :mode "0755"
+                       :literal true)
+
   (actions/exec-checked-script
-   "Create, add and configure OVS bridge + restart libvirt and qemu-kvm"
+   "Run OVS setup script"
    ;; Note: we're using at here in order to avoid a failure when the
    ;;       connection to host goes down.
-   (pipe (echo ~(format "\"/etc/init.d/networking restart;%s;service libvirt-bin start;service qemu-kvm start\""
-                        ovs-vsctl-steps))
-         (at -M "now + 1 minute"))))
+   (at -f "/tmp/ovs-setup.sh -M now + 1 minute")
+   (pipe (echo "\"service libvirt-bin start;service qemu-kvm start\"")
+         (at -M "now + 2 minutes"))))
 
 (def-plan-fn configure-openvswitch
   "Configure openvswtich for KVM server."
@@ -111,14 +101,12 @@
   (install-failsafe-conf)
   (remove-libvirt-network)
   (remove-ebtables)
-  (auto-install-ovs-modules)
-  (perform-ovs-vsctl-steps))
+  (perform-ovs-setup))
 
 (def-plan-fn configure-server
   "Install packages for KVM server and configure networking."
   []
   (install-standard-packages)
-  (install-custom-libvirt-packages)
   (configure-openvswitch))
 
 (def-plan-fn add-gre-port
@@ -186,7 +174,8 @@
    opts-file (env/get-environment [:host-config node-hostname :dnsmasq-optsfile])]
 
   (actions/remote-file "/etc/ovs-net-dnsmasq.opts"
-                       :local-file opts-file)
+                       :local-file opts-file
+                       :literal true)
   (actions/remote-file "/etc/ovs-net-dnsmasq.hosts"
                        :content hosts-file-content
                        :mode "0644"
@@ -217,4 +206,14 @@
   "Perform configuration needed to have a working KVM image server."
   []
   ;; TODO: outstanding
+  )
+
+(def-plan-fn create-image
+  "Create a KVM image according to a given spec"
+  []
+  )
+
+(def-plan-fn create-guest-vm
+  "TODO: implement"
+  []
   )
