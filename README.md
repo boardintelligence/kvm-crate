@@ -15,7 +15,7 @@ described further down), then perform specific phases on the KVM server(s) to:
 After that you can of course perform operations on the KVM guest VMs
 directly without going via the KVM server.
 
-For the moment kvm-crate assumes KVM servers are Ubuntu 12.04 LTS hosts. This
+For the moment kvm-crate assumes KVM servers are Ubuntu 12.10 hosts. This
 restriction can loosened in the future if others provide variations that
 works on other distributions and versions.
 
@@ -24,23 +24,12 @@ kvm-crate utilizes the following for setting up VMs and networking:
 * libvirt for managing guests
 * openvswitch for networking (and GRE+IPSec for connecting OVS on several KVM servers)
 
-As it stands the libvirt shipped with Ubuntu 12.04 does not come with
-support for openvswitch. Hence I've prepared some custom libvirt 1.0
-packages that are used instead (prepared from the Ubuntu raring sources).
-
 ## Configuring a KVM server
 
 First all make sure the following things hold true:
 
-1. Your intended KVM server host exists and runs Ubuntu 12.04 LTS
-2. The host is included in your hosts config map
-3. You have downloaded the custom libvirt deps to "custom-debs/" somewhere on the classpath
-
-As for step 3 the custom debs are too big to distribute with kvm-create
-and are instead downloaded onto the machine pallet is run from, then
-transferred over the KVM server target for install. An example script
-of how and where to place the files can be found in the provided
-*download-custom-debs.sh* script.
+1. Your intended KVM server host exists and runs Ubuntu 12.10
+2. The host is included in your hosts config map with a proper config
 
 Step 2 will be described in more detail shortly, let's first see how
 the call looks (assuming you are use'ing the kvm-create.api namespace):
@@ -48,9 +37,10 @@ the call looks (assuming you are use'ing the kvm-create.api namespace):
     (with-nodelist-config [hosts-config {}]
       (configure-kvm-server "host.to.configure")
 
-The second argument to *with-nodelist-config* is a map that will be passed as the :environment
-argument to any subsequent lift operation that takes place under the covers (and is
-hence available to any of your own pallet plan functions).
+*with-nodelist-config* comes from the *pallet-nodelist-helpers* helper project.
+The second argument to *with-nodelist-config* is a map that will be passed as the
+:environment argument to any subsequent lift operation that takes place under the
+covers (and is hence available to any of your own pallet plan functions).
 
 The format of the hosts-config argument that *configure-kvm-server* looks for is this (it's ok to
 add additional content):
@@ -70,46 +60,38 @@ add additional content):
                                              :host0-ip4-netmask   "public.iface.netmask"
                                              :host0-ip4-gateway   "public.iface.gw"
                                              :host0-ip4-net       "public.iface.net"
-                                             :host0-ip6-ip        "public.iface.ip6.address"
-                                             :host0-ip6-netmask   "public.iface.ip6.netmask"
-                                             :host0-ip6-gateway   "public.iface.ip6.gw"
                                              :host1-ip4-ip        "private.iface.address"
                                              :host1-ip4-broadcast "private.iface.bcast"
                                              :host1-ip4-netmask   "private.iface.netmask"
                                              :host1-ip4-net       "private.iface.net"}
-                          :ovs-vsctl-steps "ovs-vsctl add-br ovsbr0;
-                            ovs-vsctl add-br ovsbr1
-                            ovs-vsctl add-port ovsbr0 eth0;
-                            ovs-vsctl add-port ovsbr0 ovshost0 -- set interface ovshost0 type=internal;
-                            ovs-vsctl add-port ovsbr1 ovshost1 -- set interface ovshost1 type=internal"}}
+                          :ovs-setup (utils/resource-path "ovs/ovs-setup.sh"}}
 
 (The function *utils/resource-path* is from the namespace pallet.utils and
 is handy for referring to paths somewhere onthe local machine classpath)
 
 I've left the configuration of the OpenVSwitch network pretty free form. Hence
-the parts in *:interface-config* and *:ovs-vsctl-steps* are freeform and needs
-to be compatible with the content of the file given in the files referenced
-by *:interfaces-file*. You can find an example in the
-*kvm-crate/resources/ovs/interfaces*. It is compatible with the config
-example above. The example assumes one public interface on eth0 that is added to
-the OVS, we create 2 internal interfaces ovshost0 and ovshost1. The ovshost0
+the parts in *:interface-config*, *:interfaces-file* and *:ovs-setup* are freeform
+and needs to be compatible with each other. You can find an example in the
+*kvm-crate/resources/ovs/interfaces-sample* and *kvm-crate/resources/ovs/ovs-setup.sh-sample*.
+It is compatible with the config example above. The example assumes one public interface
+on eth0 that is added to the OVS, we create 2 interfaces pub0 and priv0. The pub0
 inteface gets the same config as eth0 would have had before we made it part of
-the OVS setup, and ovshost1 is an interace we put on the private network we'll
+the OVS setup, and priv0 is an interace we put on the private network we'll
 set up for the KVM guest VMs. We can use this interface to do things like serve
 DHCP and DNS on the private network.
 
-The *ovs-vsctl-steps* is a freeform set of instructions that are supposed
+The *ovs-setup* script is a freeform set of instructions that are supposed
 to properly configure OVS taking into account how your /etc/network/interfaces
 and later private network for the KVM guest VMs are setup. The example
-above is compatible with the setup descrived in the previous paragraph.
+mentioned above is compatible with the setup descrived in the previous paragraph.
 
 The *configure-kvm-server* function in the *api* namespace can be used
 as a convenience method to perform the KVM server setup (as apart to
 manually using lift). Note it will make the network changes made on the
-KVM server come into effect 1 minute after it has run (via the at command).
-This is because the network changes will cause our connection to drop and
+KVM server come into effect 2 minutes after it has run (via the at command).
+This is because the network changes may cause our connection to drop and
 signal an error. To avoid this we delay execution until after we have
-disconnected from the host. **NOTE: if you mess up the ovs-vsctl steps it's
+disconnected from the host. **NOTE: if you mess up the ovs-setup steps it's
 quite possible to lock yourself out of the remote machine so please take
 extra special care making sure it will run cleanly since you may not get
 a 2nd shot if you don't have console access to the host!**.
@@ -125,11 +107,9 @@ servers as KVM servers:
       (helpers/with-nodelist-config [hosts-config/config {}]
         (println (format "Initial setup for Hetzner host %s.." hostname))
         (hetzner-api/hetzner-initial-setup hostname)
-        (println (format "Sleep 3mins while we wait for KVM server %s to reboot.." hostname))
-        (Thread/sleep (* 3 60 1000)) ;; wait for the host to reboot
         (println (format "Configuring KVM server for %s.." hostname))
         (kvm-api/configure-kvm-server hostname)
-        (println (format "Finished configuring KVM server %s. Note: it will perform the network changes in 1min!" hostname))))
+        (println (format "Finished configuring KVM server %s. Note: it will perform the network changes in 2min!" hostname))))
 
 (the *hetzner-initial-setup* function performs actions needed to
 for a fresh Hetzner machine)
@@ -204,7 +184,7 @@ Notes:
 
 The host config map needed to support the spec and the update function is:
 
-    {"dhcp.server.to.configure" {:dhcp-interface "ovshost1"
+    {"dhcp.server.to.configure" {:dhcp-interface "priv1"
                                  :dnsmasq-optsfile (utils/resource-path "ovs/ovs-net-dnsmasq.opts"}}
 
 ### Ensuring all hosts, servers and guest, have proper /etc/hosts files
